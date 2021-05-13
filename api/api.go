@@ -9,7 +9,7 @@ import (
 )
 
 // GetAllLinks gets all links for a Wikipedia page
-func GetAllLinks(title string, targetAPI *Config) *LinkResponse {
+func GetAllLinks(title string, targetAPI *Config) (*LinkResponse, error) {
 	u, _ := url.Parse(targetAPI.APIRoot)
 	u.Scheme = targetAPI.Protocol
 
@@ -26,7 +26,7 @@ func GetAllLinks(title string, targetAPI *Config) *LinkResponse {
 
 	if reqErr != nil {
 		fmt.Println("Request failed!")
-		return nil
+		return nil, reqErr
 	}
 
 	defer res.Body.Close()
@@ -34,15 +34,15 @@ func GetAllLinks(title string, targetAPI *Config) *LinkResponse {
 	body, readBodyErr := ioutil.ReadAll(res.Body)
 	if readBodyErr != nil {
 		fmt.Println("Can't read response body!")
-		return nil
+		return nil, readBodyErr
 	}
 
 	data := LinkResponse{}
 	jsonParseErr := json.Unmarshal(body, &data)
 	if jsonParseErr != nil {
 		fmt.Println("Invalid json!")
-		return nil
+		return nil, readBodyErr
 	}
 
-	return &data
+	return &data, nil
 }
