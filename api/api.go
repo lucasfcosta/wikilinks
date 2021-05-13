@@ -8,8 +8,8 @@ import (
 	"net/url"
 )
 
-// GetAllLinks gets all links for a Wikipedia page
-func GetAllLinks(title string, targetAPI *Config) (*LinkResponse, error) {
+// getLinkPage gets a particular page for a title
+func getLinkPage(title string, targetAPI *Config, plcontinue *string) (*LinkResponse, error) {
 	u, _ := url.Parse(targetAPI.APIRoot)
 	u.Scheme = targetAPI.Protocol
 
@@ -19,6 +19,10 @@ func GetAllLinks(title string, targetAPI *Config) (*LinkResponse, error) {
 	q.Set("prop", "links")
 	q.Set("pllimit", "max")
 	q.Set("format", "json")
+
+	if plcontinue != nil {
+		q.Set("plcontinue", *plcontinue)
+	}
 
 	u.RawQuery = q.Encode()
 
@@ -45,4 +49,37 @@ func GetAllLinks(title string, targetAPI *Config) (*LinkResponse, error) {
 	}
 
 	return &data, nil
+}
+
+func fetchLoop(title string, targetAPI *Config, plcontinue *string) ([]string, error) {
+	page, err := getLinkPage(title, targetAPI, plcontinue)
+	if err != nil {
+		return nil, err
+	}
+
+	if page.BatchComplete != nil {
+		return []string{}, nil
+	}
+
+	var result []string
+	for _, v := range page.Query.PageLinks {
+		titles := make([]string, len(v.Links))
+		for i, l := range v.Links {
+			titles[i] = l.Title
+		}
+
+		result = append(result, titles...)
+	}
+
+	nextResponse, err := fetchLoop(title, targetAPI, &page.Continue.Plcontinue)
+	if err != nil {
+		return nil, err
+	}
+
+	return append(result, nextResponse...), nil
+}
+
+// GetAllLinks returns a list of all the links in a page
+func GetAllLinks(title string, targetAPI *Config) ([]string, error) {
+	return fetchLoop(title, targetAPI, nil)
 }

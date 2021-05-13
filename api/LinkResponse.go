@@ -1,7 +1,9 @@
 package api
 
+// LinkResponse represents the response for a link query on the Wikipedia API.
 type LinkResponse struct {
-	Continue struct {
+	BatchComplete *string `json:"batchcomplete"`
+	Continue      struct {
 		Plcontinue string `json:"plcontinue"`
 		Continue   string `json:"continue"`
 	} `json:"continue"`
@@ -17,6 +19,7 @@ type LinkResponse struct {
 	} `json:"limits"`
 }
 
+// PageResult represents the result for each page queried
 type PageResult struct {
 	Pageid int    `json:"pageid"`
 	Ns     int    `json:"ns"`
