@@ -9,11 +9,7 @@ import (
 
 func main() {
 	// api.GetAllLinks("brazil", api.NewConfigFromEnv())
-	path, err := crawling.FindPath("brazil", "Nafi Thiam", api.NewConfigFromEnv())
-
-	if err != nil {
-		fmt.Printf("Couldn't find path")
-	}
+	path := crawling.FindPath("brazil", "Nafi Thiam", api.NewConfigFromEnv(), nil)
 
 	fmt.Printf("%v", path)
 }

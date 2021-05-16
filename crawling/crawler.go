@@ -1,46 +1,70 @@
 package crawling
 
 import (
-	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/lucasfcosta/wikilinks/api"
 )
 
-func FindPath(sourceTitle string, targetTitle string, targetAPI *api.Config) ([]string, error) {
+func FindPath(sourceTitle string, targetTitle string, targetAPI *api.Config) []string {
 	visitedLinks := make(map[string]bool)
 
-	queue := [][]string{[]string{sourceTitle}}
-	currentDepth := 0
+	requestSemaphore := make(chan int, targetAPI.MaxParallelRequests)
+	searchChannel := make(chan []string)
+	resultChannel := make(chan []string)
 
-	for len(queue) > 0 {
-		path := queue[0]
-		currentTitle := path[len(path)-1]
-		queue = queue[1:]
+	visitedLinksMutex := &sync.Mutex{}
 
-		if len(path) > currentDepth {
-			fmt.Printf("Moving to depth %d\n", currentDepth+1)
-			currentDepth = currentDepth + 1
+	go func() []string {
+		for {
+			select {
+			case path := <-searchChannel:
+				{
+					currentTitle := path[len(path)-1]
+
+					if strings.EqualFold(currentTitle, targetTitle) {
+						resultChannel <- path
+						break
+					}
+
+					visitedLinksMutex.Lock()
+					isVisited := visitedLinks[currentTitle]
+					visitedLinksMutex.Unlock()
+
+					if isVisited {
+						break
+					}
+
+					go func() {
+						requestSemaphore <- 1
+						fmt.Printf("Searching for %s - %v\n", currentTitle, path)
+						nextTitles, _ := api.GetAllLinks(currentTitle, targetAPI)
+						<-requestSemaphore
+						visitedLinksMutex.Lock()
+						visitedLinks[currentTitle] = true
+						visitedLinksMutex.Unlock()
+
+						for _, nextTitle := range nextTitles {
+							newPath := append(path, nextTitle)
+							searchChannel <- newPath
+						}
+					}()
+				}
+
+			case result := <-resultChannel:
+				{
+					defer close(requestSemaphore)
+					defer close(searchChannel)
+					defer close(resultChannel)
+					return result
+				}
+			}
 		}
+	}()
 
-		if strings.EqualFold(currentTitle, targetTitle) {
-			return path, nil
-		}
-
-		if visitedLinks[currentTitle] {
-			continue
-		}
-
-		fmt.Printf("Searching for %s - %v\n", currentTitle, path)
-		nextTitles, _ := api.GetAllLinks(currentTitle, targetAPI)
-		visitedLinks[currentTitle] = true
-
-		for _, nextTitle := range nextTitles {
-			newPath := append(path, nextTitle)
-			queue = append(queue, newPath)
-		}
-	}
-
-	return nil, errors.New("Path not found.")
+	searchChannel <- []string{sourceTitle}
+	result := <-resultChannel
+	return result
 }
